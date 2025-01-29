@@ -1,0 +1,114 @@
+import tkinter as tk
+from pynput import keyboard
+from langdetect import detect
+import threading
+from PIL import Image
+import pyperclip
+
+# המילונים להמרה בין עברית לאנגלית ולהפך
+heb_to_eng = {
+    'א': 't', 'ב': 'c', 'ג': 'd', 'ד': 's', 'ה': 'v', 'ו': 'u', 'ז': 'z',
+    'ח': 'j', 'ט': 'p', 'י': 'h', 'כ': 'f', 'ל': 'k', 'מ': 'n', 'נ': 'b',
+    'ס': 'x', 'ע': 'g', 'פ': ';', 'צ': 'm', 'ק': 'l', 'ר': 'r', 'ש': 'a',
+    'ת': ',', 'ם': 'o', 'ק': 'e', 'ן': 'i','ך': 'l','פ': 'p','/': 'q','\'': 'w','ט': 'y'
+}
+eng_to_heb = {
+    't': 'א', 'c': 'ב', 'd': 'ג', 's': 'ד', 'v': 'ה', 'u': 'ו', 'z': 'ז',
+    'j': 'ח', 'p': 'ט', 'h': 'י', 'f': 'כ', 'k': 'ל', 'n': 'מ', 'b': 'נ',
+    'x': 'ס', 'g': 'ע', ';': 'פ', 'm': 'צ', 'l': 'ק', 'r': 'ר', 'a': 'ש',
+    ',': 'ת' , 'o': 'ם', 'e': 'ק', 'i': 'ן', 'q': '/','w': '\'', 'y': 'ט'
+}
+
+# פונקציה שתמיר את התו הקלד לשפה ההפוכה
+def detect_and_correct(text):
+    corrected_text = ""
+    for char in text:
+        if char in heb_to_eng:
+            corrected_text += heb_to_eng[char]  # המרת עברית לאנגלית
+        elif char in eng_to_heb:
+            corrected_text += eng_to_heb[char]  # המרת אנגלית לעברית
+        else:
+            corrected_text += char  # אם התו לא נמצא בהמרה, הוסף אותו כפי שהוא
+    return corrected_text
+
+# פונקציה שתשדר את התיקון לחלון Tkinter
+def show_correction(correction):
+    text_var.set(correction)  # עדכון טקסט בחלון
+    # אם החלון ממוזער, מציג אותו מחדש 
+    if not window.state() == 'normal':
+        window.deiconify()  # מבטל את המינימיזציה של החלון
+
+def on_click(event):
+    # העתקת הטקסט ללוח
+    pyperclip.copy(text_var.get())
+    print(f"Copied to clipboard: {text_var.get()}")  # דיבוג
+
+typed_text = []
+
+# פעולת הקשה על מקש
+def on_type(key):
+    global typed_text
+    try:
+        # בדיקת סימני סיום משפט או לחיצה על אנטר
+        if key == keyboard.Key.enter or (hasattr(key, 'char') and key.char in '.!?'):
+            text = ''.join(typed_text).strip()  # איסוף כל הטקסט
+            print(f"Text to check: {text}")  # דיבוג
+            process_text(text)  # טיפול בטקסט
+            typed_text.clear()  # איפוס הטקסט לאחר תיקון
+        elif hasattr(key, 'char') and key.char is not None and key.char.isprintable():
+            typed_text.append(key.char)  # הוספת התו לרשימה
+            print(f"Typed text so far: {''.join(typed_text)}")  # דיבוג
+        elif key == keyboard.Key.space:  
+            typed_text.append(' ')  # שמירת רווח
+            text = ''.join(typed_text).strip()  # איסוף הטקסט הנוכחי
+            process_text(text)  # הצגת תיקון למשפט מלא ברווח
+    except Exception as e:
+        print(f"Error: {e}")
+
+# פונקציה לטיפול בטקסט המוקלד
+def process_text(text):
+    if text:  # אם יש טקסט
+        corrected_text = detect_and_correct(text)  # תיקון המשפט
+        print(f"Corrected text: {corrected_text}")  # דיבוג
+        if corrected_text != text:
+            show_correction(corrected_text)  # הצגת התיקון
+
+
+# הפעלת המאזין למקלדת ברקע
+def start_listener():
+    with keyboard.Listener(on_press=on_type) as listener:
+        listener.join()
+
+# יצירת חלון Tkinter
+def create_window():
+    global text_var, window
+    # יצירת חלון חדש
+    window = tk.Tk()
+    window.title("תיקון שפה")
+    window.geometry("150x150")  # גודל החלון
+    window.resizable(False, False)  # למנוע שינוי גודל
+    window.attributes("-topmost", True)
+
+    # יצירת תווית להציג את התיקון
+    text_var = tk.StringVar()
+    label = tk.Label(window, textvariable=text_var, font=("Arial", 12), wraplength=100)
+    label.pack(pady=30)
+
+    # כפתור סגירה של החלון
+    close_button = tk.Button(window, text="סגור", command=window.quit)
+    close_button.pack(pady=10)
+    label.bind("<Button-1>", on_click)
+    
+    # מינימיזציה של החלון בתחילה
+    window.iconify()
+
+    # הרצת חלון Tkinter
+    window.mainloop()
+
+# הפעלת המאזין והחלון ברקע
+if __name__ == "__main__":
+    # הרצת המאזין למקלדת
+    threading.Thread(target=start_listener, daemon=True).start()
+    
+    # יצירת והפעלת חלון Tkinter
+    create_window()
